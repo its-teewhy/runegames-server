@@ -1,0 +1,186 @@
+{
+  "passwordHash": "$2a$13$ILwcM/PKN74ItRzaCD93QOu7P2QxalZT.eb7dBD4RHiPAcYD1adM6",
+  "username": "Tyler too",
+  "displayName": "Tyler too",
+  "previousXteas": [
+    1796416882,
+    -2067101826,
+    944745174,
+    -1812068970
+  ],
+  "x": 1247,
+  "z": 3160,
+  "height": 0,
+  "privilege": 0,
+  "displayMode": 0,
+  "runEnergy": 100.0,
+  "appearance": {
+    "gender": 0,
+    "looks": [
+      9,
+      14,
+      109,
+      26,
+      33,
+      36,
+      42
+    ],
+    "colors": [
+      0,
+      3,
+      2,
+      0,
+      0
+    ]
+  },
+  "skills": [
+    {
+      "skill": 0,
+      "xp": 101333.0,
+      "lvl": 50
+    },
+    {
+      "skill": 1,
+      "xp": 101333.0,
+      "lvl": 50
+    },
+    {
+      "skill": 2,
+      "xp": 150733.0,
+      "lvl": 53
+    },
+    {
+      "skill": 3,
+      "xp": 1.30508565E7,
+      "lvl": 99
+    },
+    {
+      "skill": 4,
+      "xp": 101333.0,
+      "lvl": 50
+    },
+    {
+      "skill": 5,
+      "xp": 50339.0,
+      "lvl": 43
+    },
+    {
+      "skill": 6,
+      "xp": 101333.0,
+      "lvl": 50
+    },
+    {
+      "skill": 7,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 8,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 9,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 10,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 11,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 12,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 13,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 14,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 15,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 16,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 17,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 18,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 19,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 20,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 21,
+      "xp": 0.0,
+      "lvl": 1
+    },
+    {
+      "skill": 22,
+      "xp": 0.0,
+      "lvl": 1
+    }
+  ],
+  "attributes": {
+    "wins": 1,
+    "kills": 0,
+    "in-lobby": false,
+    "in-game": false,
+    "perk": "",
+    "losses": 1,
+    "deaths": 1
+  },
+  "timers": [],
+  "itemContainers": [],
+  "varps": [
+    {
+      "id": 43,
+      "state": 1
+    },
+    {
+      "id": 173,
+      "state": 1
+    },
+    {
+      "id": 300,
+      "state": 1000
+    },
+    {
+      "id": 1075,
+      "state": 1
+    },
+    {
+      "id": 1737,
+      "state": -2147483648
+    }
+  ]
+}
