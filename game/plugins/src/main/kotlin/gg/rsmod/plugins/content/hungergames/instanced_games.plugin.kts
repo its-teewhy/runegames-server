@@ -77,8 +77,16 @@ enum class MapInformation(val area: String, val startTile: Tile, val endTile: Ti
 }
 
 
-private val waiting = ArrayList<Player>()
-val activeGames = ArrayList<HungerGameInstance>()
+val waiting = mutableListOf<Player>()
+
+companion object CachedGames {
+
+    val activeGames = mutableListOf<HungerGameInstance>()
+
+    fun removeGame(instance: HungerGameInstance) {
+        activeGames.remove(instance)
+    }
+}
 
 on_obj_option(obj = Objs.LOBBY_PORTAL, option = "enter") {
     player.queue { dialogue() }
@@ -110,15 +118,21 @@ fun enterLobby(player: Player) {
     player.attr[Constants.IN_LOBBY] = true
     player.openInterface(interfaceId = 333, dest = InterfaceDestination.WALKABLE)
     updateWaitingInterface()
-    if (waiting.size == Constants.MINIMUM_PLAYERS) {
+    if (waiting.size >= Constants.MINIMUM_PLAYERS) {
         world.queue {
             wait(5)
+            if(waiting.size < Constants.MINIMUM_PLAYERS)
+                terminate()
             world.players.forEach { players -> players.message("A Hunger Games match is about to begin, get in or get out now!") }
             wait(10)
-            val random = Random.nextInt(0..2)
-            if(random == 0) { startInstance(MapInformation.FOREST) }
-            if(random == 1) { startInstance(MapInformation.SNOW) }
-            if(random == 2) { startInstance(MapInformation.DESERT) }
+            if(waiting.size < Constants.MINIMUM_PLAYERS)
+                terminate()
+            when(Random.nextInt(0..2)) {
+                0 -> startInstance(MapInformation.FOREST)
+                1 -> startInstance(MapInformation.SNOW)
+                2 -> startInstance(MapInformation.DESERT)
+            }
+
         }
     }
 }
@@ -147,7 +161,7 @@ fun startInstance(environment: MapInformation) {
 
     world.instanceAllocator.allocate(world, environment.ordinal, instance, instanceConfig.build())?.let { map ->
         val gameInstance = HungerGameInstance(map, world, environment)
-        activeGames.add(gameInstance)
+        CachedGames.activeGames.add(gameInstance)
         waiting.shuffle()
         if(waiting.size >= Constants.MAXIMUM_PLAYERS) {
             waiting.take(Constants.MAXIMUM_PLAYERS).forEach { player ->
@@ -155,13 +169,14 @@ fun startInstance(environment: MapInformation) {
                 gameInstance.addPlayer(player)
             }
         } else if(waiting.size >= Constants.MINIMUM_PLAYERS) {
-            waiting.take(Constants.MINIMUM_PLAYERS).forEach { player ->
+            waiting.take(waiting.size).forEach { player ->
                 waiting.remove(player)
                 gameInstance.addPlayer(player)
             }
         }
-        gameInstance.updateFightingInterface()
     }
+
+
     updateWaitingInterface()
 }
 
@@ -183,17 +198,16 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
     val spectating = mutableListOf<Player>()
 
     fun updateFightingInterface() {
-        players.forEach { player ->
-            player.setComponentText(333, 6, "Fighting: ${players.size}")
-            player.setComponentText(333, 7, "Spectating: ${spectating.size}")
-            player.setComponentText(333, 8, "Fight area: ${environment.area}")
-        }
-        spectating.forEach { player ->
-            player.setComponentText(333, 6, "Fighting: ${players.size}")
-            player.setComponentText(333, 7, "Spectating: ${spectating.size}")
-            player.setComponentText(333, 8, "Fight area: ${environment.area}")
-        }
+        players.forEach { sendFightingInterface(it) }
+        spectating.forEach { sendFightingInterface(it) }
     }
+
+    fun sendFightingInterface(player: Player) {
+        player.setComponentText(333, 6, "Fighting: ${players.size}")
+        player.setComponentText(333, 7, "Spectating: ${spectating.size}")
+        player.setComponentText(333, 8, "Fight area: ${environment.area}")
+    }
+
 
     fun finish() {
         if (players.size > 1) {
@@ -210,6 +224,7 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
         spectating.clear()
         players.clear()
         world.instanceAllocator.deallocate(world, instancedMap)
+        CachedGames.removeGame(this)
     }
 
     fun stop(player: Player) {
@@ -220,8 +235,8 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
             player.inventory.add(Items.SURVIVAL_TOKEN, 1)
             player.closeInterface(interfaceId = 374)
             player.closeInterface(interfaceId = 231)
-            player.unlock()
         }
+        player.unlock()
         player.closeInterface(interfaceId = 333)
         player.moveTo(instancedMap.exitTile)
     }
@@ -279,8 +294,8 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
     }
 
     fun remove(player: Player, logout: Boolean) {
-        players.remove(player)
         reset(player)
+        players.remove(player)
         if(logout) { stop(player) }
         if(!logout && players.size > 0) {
             spectating.add(player)
@@ -320,11 +335,11 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
         players.add(player)
         player.attr[Constants.IN_LOBBY] = false
         player.attr[Constants.IN_GAME] = true
-        player.openInterface(dest = InterfaceDestination.PVP_OVERLAY, interfaceId = 90)
-        player.sendOption("Attack", 2)
         player.queue {
-            player.lock()
             teleport(player)
+            player.lock()
+            player.openInterface(dest = InterfaceDestination.PVP_OVERLAY, interfaceId = 90)
+            player.sendOption("Attack", 2)
             wait(2)
             player.forceChat("5..")
             wait(2)
@@ -337,13 +352,15 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
             player.forceChat("1..")
             wait(2)
             player.forceChat("Let the games begin!")
+
+            sendFightingInterface(player)
             player.unlock()
         }
     }
 }
 
-fun getGameInstance(player: Player): HungerGameInstance? = activeGames.find { game -> game.players.contains(player) }
-fun getSpectatingInstance(player: Player): HungerGameInstance? = activeGames.find { game -> game.spectating.contains(player) }
+fun getGameInstance(player: Player): HungerGameInstance? = CachedGames.activeGames.find { game -> game.players.contains(player) }
+fun getSpectatingInstance(player: Player): HungerGameInstance? = CachedGames.activeGames.find { game -> game.spectating.contains(player) }
 
 on_logout {
     if (player.attr[Constants.IN_LOBBY] == true) {
