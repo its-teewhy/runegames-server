@@ -413,9 +413,13 @@ class PluginRepository(val world: World) {
         ClassGraph().enableAllInfo().whitelistModules().scan().use { result ->
             val plugins = result.getSubclasses(KotlinPlugin::class.java.name).directOnly()
             plugins.forEach { p ->
-                val pluginClass = p.loadClass(KotlinPlugin::class.java)
-                val constructor = pluginClass.getConstructor(PluginRepository::class.java, World::class.java, Server::class.java)
-                constructor.newInstance(this, world, server)
+                try {
+                    val pluginClass = p.loadClass(KotlinPlugin::class.java)
+                    val constructor = pluginClass.getConstructor(PluginRepository::class.java, World::class.java, Server::class.java)
+                    constructor.newInstance(this, world, server)
+                } catch(e: Exception){
+                    e.printStackTrace()
+                }
             }
         }
     }
