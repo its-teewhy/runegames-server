@@ -6,6 +6,7 @@ import gg.rsmod.game.model.World
 import gg.rsmod.game.model.entity.GroundItem
 import gg.rsmod.game.model.entity.Npc
 import gg.rsmod.game.model.skill.SkillSet
+import gg.rsmod.game.plugin.PluginRepository
 import gg.rsmod.game.protocol.ClientChannelInitializer
 import gg.rsmod.game.service.GameService
 import gg.rsmod.game.service.rsa.RsaService
@@ -29,12 +30,25 @@ import java.util.concurrent.TimeUnit
  *
  * @author Tom <rspsmods@gmail.com>
  */
+
+object ServerSingleton {
+    lateinit var singleton: Server
+}
+
 class Server {
 
+
+    init {
+        ServerSingleton.singleton = this
+    }
     /**
      * The properties specific to our API.
      */
     private val apiProperties = ServerProperties()
+
+    private lateinit var gameProperties: ServerProperties
+
+    private lateinit var world: World
 
     private val acceptGroup = NioEventLoopGroup(2)
 
@@ -78,7 +92,8 @@ class Server {
          * Load the game property file.
          */
         val initialLaunch = Files.deleteIfExists(Paths.get("./first-launch"))
-        val gameProperties = ServerProperties()
+
+        gameProperties = ServerProperties()
         val devProperties = ServerProperties()
         gameProperties.loadYaml(gameProps.toFile())
         if (devProps != null && Files.exists(devProps)) {
@@ -109,7 +124,7 @@ class Server {
                 debugItemActions = devProperties.getOrDefault("debug-items", false),
                 debugMagicSpells = devProperties.getOrDefault("debug-spells", false))
 
-        val world = World(gameContext, devContext)
+        world = World(gameContext, devContext)
 
         /*
          * Load the file store.
@@ -220,5 +235,16 @@ class Server {
 
     fun getApiSite(): String = apiProperties.getOrDefault("org-site", "rspsmods.com")
 
+    public fun reloadPlugins() {
+
+        val individualStopwatch = Stopwatch.createUnstarted()
+        world.plugins = PluginRepository(world)
+        world.plugins.init(
+                server = this, world = world,
+                jarPluginsDirectory = gameProperties.getOrDefault("plugin-packed-path", "./plugins"))
+        logger.info("Loaded {} plugins in {}ms.", DecimalFormat().format(world.plugins.getPluginCount()), individualStopwatch.elapsed(TimeUnit.MILLISECONDS))
+    }
     companion object : KLogging()
+
 }
+

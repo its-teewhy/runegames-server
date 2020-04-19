@@ -22,10 +22,22 @@ import java.nio.file.Paths
  */
 class ItemMetadataService : Service {
 
+    var serverProperties = ServerProperties()
+
     override fun init(server: Server, world: World, serviceProperties: ServerProperties) {
-        val path = Paths.get(serviceProperties.getOrDefault("path", "./data/cfg/items.yml"))
+        serverProperties = serviceProperties
+        load(world)
+    }
+
+
+    fun load(world: World) {
+        val path = Paths.get(serverProperties.getOrDefault("path", "./data/cfg/items.yml"))
         if (!Files.exists(path)) {
             throw FileNotFoundException("Path does not exist. $path")
+        }
+
+        if(serverProperties.getOrDefault("use-file-watcher", false)){
+            logger.info("Started filewatcher service for {}", path)
         }
 
         Files.newBufferedReader(path).use { reader ->
