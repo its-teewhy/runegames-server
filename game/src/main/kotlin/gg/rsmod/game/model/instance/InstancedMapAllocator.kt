@@ -8,6 +8,7 @@ import gg.rsmod.game.model.entity.DynamicObject
 import gg.rsmod.game.model.entity.Player
 import gg.rsmod.game.model.entity.StaticObject
 import gg.rsmod.game.model.region.Chunk
+import kotlinx.coroutines.*
 
 /**
  * A system responsible for allocating and de-allocating [InstancedMap]s.
@@ -37,7 +38,7 @@ class InstancedMapAllocator {
      * The [InstancedChunkSet] that holds all the [InstancedChunk]s that will make
      * up the newly constructed [InstancedMap], if applicable.
      */
-    fun allocate(world: World, environment: Int, chunks: InstancedChunkSet, configs: InstancedMapConfiguration): InstancedMap? {
+    suspend fun allocate(world: World, environment: Int, chunks: InstancedChunkSet, configs: InstancedMapConfiguration): InstancedMap? {
         val area = if(environment == 0) { VALID_AREA } else if(environment == 1){ VALID_AREA2 } else { VALID_AREA3 }
         val step = 128
 
@@ -64,6 +65,44 @@ class InstancedMapAllocator {
         }
 
         return null
+    }
+
+    suspend fun lazyAllocate(world: World, environment: Int, chunks: InstancedChunkSet, configs: InstancedMapConfiguration): Deferred<InstancedMap?> = coroutineScope{
+        val region = async<InstancedMap?> {
+
+            val area = if (environment == 0) {
+                VALID_AREA
+            } else if (environment == 1) {
+                VALID_AREA2
+            } else {
+                VALID_AREA3
+            }
+            val step = 128
+
+            /*
+             * The total amount of tiles that the new [InstancedMap] will occupy.
+             */
+            val totalTiles = chunks.regionSize * Chunk.REGION_SIZE
+            for (x in area.bottomLeftX until area.topRightX step step) {
+                for (z in area.bottomLeftZ until area.topRightZ step step) {
+
+                    /*
+                 * If a map is already allocated in [x,z], we move on.
+                 */
+                    if (maps.any { it.area.contains(x, z) || it.area.contains(x + totalTiles - 1, z + totalTiles - 1) }) {
+                        continue
+                    }
+
+                    val map = allocate(x, z, chunks, configs)
+                    applyCollision(world, map, configs.bypassObjectChunkBounds)
+                    maps.add(map)
+                    return@async map
+                }
+            }
+
+            return@async null
+        }
+        region
     }
 
     private fun allocate(x: Int, z: Int, chunks: InstancedChunkSet, configs: InstancedMapConfiguration): InstancedMap =
@@ -142,7 +181,7 @@ class InstancedMapAllocator {
      */
     fun getMap(tile: Tile): InstancedMap? = maps.find { it.area.contains(tile) }
 
-    private fun applyCollision(world: World, map: InstancedMap, bypassObjectChunkBounds: Boolean) {
+    private suspend fun applyCollision(world: World, map: InstancedMap, bypassObjectChunkBounds: Boolean) {
         val bounds = Chunk.CHUNKS_PER_REGION * map.chunks.regionSize
         val heights = Tile.TOTAL_HEIGHT_LEVELS
 

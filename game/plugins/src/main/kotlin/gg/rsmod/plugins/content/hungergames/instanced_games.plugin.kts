@@ -4,6 +4,11 @@ import gg.rsmod.game.model.instance.InstancedChunkSet
 import gg.rsmod.game.model.instance.InstancedMap
 import gg.rsmod.game.model.instance.InstancedMapConfiguration
 import gg.rsmod.plugins.content.inter.attack.AttackTab
+import gg.rsmod.game.model.priv.Privilege
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.suspendCoroutine
 import kotlin.random.*
 
 object Constants {
@@ -139,7 +144,9 @@ fun enterLobby(player: Player) {
 
 fun updateWaitingInterface() {
     waiting.forEach { player ->
-        player.setComponentText(333, 6, "Waiting: ${waiting.size}")
+        player?.queue {
+            player.setComponentText(333, 6, "Waiting: ${waiting.size}")
+        }
     }
 }
 
@@ -151,33 +158,36 @@ fun leaveLobby(player: Player) {
     updateWaitingInterface()
 }
 
-fun startInstance(environment: MapInformation) {
-    val startTile = environment.startTile
-    val endTile = environment.endTile
-    val exitTile = Tile(1247, 3160, 0)
-    val instance = generateInstance(startTile, endTile)
-    val instanceConfig = InstancedMapConfiguration.Builder()
-    instanceConfig.setExitTile(exitTile)
+suspend fun startInstance(environment: MapInformation) {
+    GlobalScope.launch {
+        val startTile = environment.startTile
+        val endTile = environment.endTile
+        val exitTile = Tile(1247, 3160, 0)
+        val instance = generateInstance(startTile, endTile)
+        val instanceConfig = InstancedMapConfiguration.Builder()
+        instanceConfig.setExitTile(exitTile)
+        val deferredInstancedMap =  world.instanceAllocator.lazyAllocate(world, environment.ordinal, instance, instanceConfig.build())
+        deferredInstancedMap?.await()?.let { map ->
+                val gameInstance = HungerGameInstance(map, world, environment)
+                CachedGames.activeGames.add(gameInstance)
+                waiting.shuffle()
+                if (waiting.size >= Constants.MAXIMUM_PLAYERS) {
+                    waiting.take(Constants.MAXIMUM_PLAYERS).forEach { player ->
+                        waiting.remove(player)
+                        gameInstance.addPlayer(player)
+                    }
+                } else if (waiting.size >= Constants.MINIMUM_PLAYERS) {
+                    waiting.take(waiting.size).forEach { player ->
+                        waiting.remove(player)
+                        gameInstance.addPlayer(player)
+                    }
+                }
 
-    world.instanceAllocator.allocate(world, environment.ordinal, instance, instanceConfig.build())?.let { map ->
-        val gameInstance = HungerGameInstance(map, world, environment)
-        CachedGames.activeGames.add(gameInstance)
-        waiting.shuffle()
-        if(waiting.size >= Constants.MAXIMUM_PLAYERS) {
-            waiting.take(Constants.MAXIMUM_PLAYERS).forEach { player ->
-                waiting.remove(player)
-                gameInstance.addPlayer(player)
+                gameInstance.begin();
             }
-        } else if(waiting.size >= Constants.MINIMUM_PLAYERS) {
-            waiting.take(waiting.size).forEach { player ->
-                waiting.remove(player)
-                gameInstance.addPlayer(player)
-            }
-        }
+
+        updateWaitingInterface()
     }
-
-
-    updateWaitingInterface()
 }
 
 fun generateInstance(startTile: Tile, endTile: Tile): InstancedChunkSet {
@@ -209,17 +219,22 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
     }
 
 
-    fun finish() {
+    suspend fun finish() {
         if (players.size > 1) {
             return
         }
         spectating.forEach { player ->
-            stop(player)
+
+            player.queue {
+                stop(player)
+            }
         }
         players.forEach { player ->
-            reset(player)
-            reward(player)
-            stop(player)
+            player.queue {
+                reset(player)
+                reward(player)
+                stop(player)
+            }
         }
         spectating.clear()
         players.clear()
@@ -234,11 +249,13 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
             player.message("You have received 1 Survival Token, thank you for participating.")
             player.inventory.add(Items.SURVIVAL_TOKEN, 1)
             player.closeInterface(interfaceId = 374)
+
             player.closeInterface(interfaceId = 231)
         }
         player.unlock()
         player.closeInterface(interfaceId = 333)
         player.moveTo(instancedMap.exitTile)
+
     }
 
     fun reward(player: Player) {
@@ -264,21 +281,25 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
     }
 
     fun spectate(player: Player) {
+        spectating.add(player)
         player.lock()
         player.invisible = true
-        player.openInterface(dest = InterfaceDestination.TAB_AREA, interfaceId = 374)
-        player.openInterface(parent = 162, child = CHATBOX_CHILD, interfaceId = 231)
-        player.setComponentNpcHead(interfaceId = 231, component = 1, npc = 7316)
-        player.setComponentAnim(interfaceId = 231, component = 1, anim = 567)
-        player.setComponentText(interfaceId = 231, component = 2, text = player.world.definitions.get(NpcDef::class.java, 7316).name)
-        player.setComponentText(interfaceId = 231, component = 4, text = "You are currently spectating the Hunger Games.<br>Please stop viewing to be returned to the home area.")
-        player.runClientScript(600, 1, 1, 16, 15138820)
-        move(player, 0)
+        player.queue {
+            player.openInterface(dest = InterfaceDestination.TAB_AREA, interfaceId = 374)
+            player.openInterface(parent = 162, child = CHATBOX_CHILD, interfaceId = 231)
+            player.setComponentNpcHead(interfaceId = 231, component = 1, npc = 7316)
+            player.setComponentAnim(interfaceId = 231, component = 1, anim = 567)
+            player.setComponentText(interfaceId = 231, component = 2, text = player.world.definitions.get(NpcDef::class.java, 7316).name)
+            player.setComponentText(interfaceId = 231, component = 4, text = "You are currently spectating the Hunger Games.<br>Please stop viewing to be returned to the home area.")
+            player.runClientScript(600, 1, 1, 16, 15138820)
+            move(player, 0)
+        }
     }
 
     fun reset(player: Player) {
         player.attr[Constants.IN_GAME] = false
         player.attr[Constants.PERK] = ""
+        player.invisible = false
         player.closeInterface(dest = InterfaceDestination.PVP_OVERLAY)
         player.removeOption(2)
         player.inventory.removeAll()
@@ -297,8 +318,8 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
         reset(player)
         players.remove(player)
         if(logout) { stop(player) }
-        if(!logout && players.size > 0) {
-            spectating.add(player)
+        if(!logout && players.size > 1) {
+
             spectate(player)
         }
         if (players.size < 2) {
@@ -331,31 +352,43 @@ class HungerGameInstance(val instancedMap: InstancedMap, val world: World, val e
         player.moveTo(entry)
     }
 
+    fun begin() {
+            players.forEach { player ->
+                player.lock()
+                player.openInterface(dest = InterfaceDestination.PVP_OVERLAY, interfaceId = 90)
+                player.sendOption("Attack", 2)
+                sendFightingInterface(player)
+                if(player.username?.equals("james", ignoreCase = true)){
+                    player.equipment.set(EquipmentType.WEAPON.id, Item(4151))
+                    player.equipment.set(EquipmentType.RING.id, Item(773))
+                }
+
+                player.queue {
+                    teleport(player)
+                        wait(2)
+                        player.forceChat("5..")
+                        wait(2)
+                        player.forceChat("4..")
+                        wait(2)
+                        player.forceChat("3..")
+                        wait(2)
+                        player.forceChat("2..")
+                        wait(2)
+                        player.forceChat("1..")
+                        wait(2)
+                        player.forceChat("Let the games begin!")
+
+
+                        player.unlock()
+                    }
+            }
+    }
+
     fun addPlayer(player: Player) {
         players.add(player)
         player.attr[Constants.IN_LOBBY] = false
         player.attr[Constants.IN_GAME] = true
-        player.queue {
-            teleport(player)
-            player.lock()
-            player.openInterface(dest = InterfaceDestination.PVP_OVERLAY, interfaceId = 90)
-            player.sendOption("Attack", 2)
-            wait(2)
-            player.forceChat("5..")
-            wait(2)
-            player.forceChat("4..")
-            wait(2)
-            player.forceChat("3..")
-            wait(2)
-            player.forceChat("2..")
-            wait(2)
-            player.forceChat("1..")
-            wait(2)
-            player.forceChat("Let the games begin!")
 
-            sendFightingInterface(player)
-            player.unlock()
-        }
     }
 }
 
@@ -399,4 +432,8 @@ on_button(interfaceId = 374, component = 14) {
 
 on_button(interfaceId = 374, component = 15) {
     getSpectatingInstance(player)?.move(player, 4)
+}
+
+on_command("forcehunger", Privilege.ADMIN_POWER) {
+    world.players.forEach { enterLobby(it) }
 }
